@@ -92,89 +92,6 @@ Sub ColorWildcards()
 
 End Sub
 
-
-Sub TTest()
-
-    Dim r As Range
-    Set r = GetRow("UserLocations", 1, "Plane XY")
-    If Not r Is Nothing Then
-        r.Select
-        MsgBox r.Cells(1, 2).Value
-    End If
-End Sub
-
-
-
-
-Sub FiguresSetViews()
-' Action: Produces an out
-'
-    Dim i As Integer, j As Integer
-    Dim outStr As String
-    outStr = ""
-    
-    ' Define HideAllKnownObjects subroutine
-    Dim userLocations As Range
-    Set userLocations = Range("UserLocations")
-    Dim locType As String
-    outStr = outStr & "# Hides all known objects in Figure X" & vbNewLine
-    outStr = outStr & "!sub HideAllKnownObjects {" & vbNewLine
-    For i = 1 To userLocations.Rows.Count
-        If userLocations(i, 1) <> "" Then
-            outStr = outStr & "   >hide /" & UCase(userLocations(i, 2)) & ":" & userLocations(i, 1) & ", view=/VIEW:$_[0]" & vbNewLine
-        End If
-    Next i
-    outStr = outStr & "!}" & vbNewLine
-    
-    Dim figures As Range, figureTables As Variant, figureTable As Variant
-    Dim sourceView As String, targetFigure As String, userLocType As String, userLocName As String
-    Dim userLocs As Variant
-    figureTables = Array("Figures.Geometry", "Figures.Mesh", "Figures.Solution")
-    
-    ' Loop through each figureTable (Geometry, Mesh and Solution) and hide all objects then
-    ' show the ones that suppose to be shown
-    For Each figureTable In figureTables
-        Set figures = Range(figureTable)
-        For i = 1 To figures.Rows.Count
-            sourceView = figures(i, 2)
-            targetFigure = figures(i, 1)
-            outStr = outStr & "# Figure: " & targetFigure & vbNewLine
-            outStr = outStr & "!HideAllKnownObjects(""" & targetFigure & """);" & vbNewLine
-            userLocs = Split(figures(i, 4), ",")
-            
-            For j = LBound(userLocs) To UBound(userLocs)
-                userLocName = userLocs(j)
-                Dim r As Range
-                Set r = GetRow("UserLocations", 1, userLocName)
-                If Not r Is Nothing Then
-                    userLocType = r.Cells(1, 2)
-                Else
-                    Dim question
-                    question = MsgBox("Error in """ & targetFigure & """, user location """ & userLocName & """ not found", vbExclamation + vbYesNoCancel, "User location not found")
-                    If question <> vbYes Then Exit Sub Else userLocType = "Plane"
-                End If
-                outStr = outStr & ">show /" & UCase(userLocType) & ":" & userLocName & ", view=/VIEW:" & targetFigure & vbNewLine
-            Next j
-            
-            
-            outStr = outStr & ">delete /VIEW:" & targetFigure & "/CAMERA" & vbNewLine
-            outStr = outStr & ">copy from = /VIEW:" & sourceView & "/CAMERA, to = /VIEW:" & targetFigure & "/CAMERA" & vbNewLine
-            If figures(i, 3) = "Yes" Then
-                outStr = outStr & "> report showItem=/VIEW:" & targetFigure & vbNewLine
-            Else
-                outStr = outStr & "> report hideItem=/VIEW:" & targetFigure & vbNewLine
-            End If
-            
-            outStr = outStr & "" & vbNewLine
-            
-        Next i
-    Next figureTable
-    
-    Text2Clipboard outStr
-
-End Sub
-
-
 Sub CreateReportSkeleton()
 ' Action: Creates the skeleton for the state file (.cst)
 '
@@ -234,7 +151,6 @@ Sub CreateReportSkeleton()
     outStr.AppendRow OutputReportSettings()
     outStr.AppendRow "!}"
     
-    
     ' STEP 7: Set report order
     outStr.AppendRow "!sub SortReportItems{"
     outStr.AppendRow OutputReportOrder()
@@ -273,32 +189,6 @@ Sub CreateReportSkeleton()
     
 End Sub
 
-
-Sub ReportPublish()
-' Action: Set report settings and publish reports
-'
-    Dim outStr As New ClassString
-
-    ' Update report settings
-    outStr.AppendRow ReplaceMultiple(Range("Template.ReportSettings").Text, "${FIGURE_HEIGHT}", Range("Figure.Height"), "${FIGURE_WIDTH}", _
-                                      Range("Figure.Width"), "${REPORT_PATH}", Range("Report.Path"), "${REPORT_AUTHOR}", Range("Report.Author").Text, _
-                                      "${REPORT_TITLE}", Range("Report.Title").Text)
-    ' White background
-    outStr.AppendRow ">setPreferences Viewer Background Colour Type = Solid, Viewer Background Image File =  , Viewer Background Colour = 1.0&1.0&1.0"
-    
-    ' Update model description
-    outStr.AppendRow OutputModelDescription()
-    
-    ' Update external figures
-    outStr.AppendRow OutputExternalFigures()
-    
-    outStr.AppendRow "> update"
-    outStr.AppendRow ">report save"
-    
-    Text2Clipboard outStr.Output
-    
-End Sub
-
 Function OutputModelDescription() As String
 ' Action: Returns text for the model description
 '
@@ -333,7 +223,6 @@ Function OutputResultTable() As String
 
 End Function
 
-
 Function OutputReportOrder() As String
 ' Action: Returns cmdstr for setting the report order
 '
@@ -362,7 +251,6 @@ Function OutputReportOrder() As String
     OutputReportOrder = outStr.Output
     
 End Function
-
 
 Function OutputExternalFigures() As String
 ' Action: Returns text for external figures
@@ -525,7 +413,6 @@ Function OutputLoadFile() As String
     OutputLoadFile = outStr.Output
     
 End Function
-
 
 Function PlanePointAndNormal(Name As String, X0 As Double, Y0 As Double, Z0 As Double, NormalX As Double, NormalY As Double, NormalZ As Double) As String
 ' Action:
