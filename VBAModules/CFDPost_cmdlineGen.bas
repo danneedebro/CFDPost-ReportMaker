@@ -24,6 +24,8 @@ Private Sub Text2Clipboard(OutputString As String)
 End Sub
 
 Function GetRow(TableName As String, ColumnNum As Long, Key As Variant) As Range
+' Action: Return a row (as a range object) from a named range (TableName)
+'
     On Error Resume Next
     Set GetRow = Range(TableName) _
         .Rows(WorksheetFunction.Match(Key, Range(TableName).Columns(ColumnNum), 0))
@@ -31,6 +33,16 @@ Function GetRow(TableName As String, ColumnNum As Long, Key As Variant) As Range
         Err.Clear
         Set GetRow = Nothing
     End If
+End Function
+
+Function GetRange(RangeName As String) As Range
+' Action: Return a named range
+'
+    On Error GoTo ErrorHandler
+    Set GetRange = Range(RangeName)
+    Exit Function
+ErrorHandler:
+    Err.Raise vbObjectError + 513, "Function GetRange", "Named range """ & RangeName & """ not found. ActiveWorkbook=" & ActiveWorkbook.Name & ", ActiveSheet=" & ActiveSheet.Name
 End Function
 
 Function NewLines(NumberOfNewLines As Integer) As String
@@ -47,18 +59,60 @@ Function Cells2List(ParamArray SelectedCells() As Variant) As String
     Cells2List = retStr
 End Function
 
-Function ReplaceMultiple(TextInput As String, ParamArray Args() As Variant) As String
+Function ArgList(ParamArray Arguments() As Variant) As String
+    ' Handle cases where variable arguments both given as Array("","") and comma-separated values
+    Dim args As Variant
+    Dim nArgs As Integer
+    nArgs = UBound(Arguments) - LBound(Arguments) + 1
+    If nArgs = 0 Then
+        args = Arguments
+        
+        Exit Function
+    ElseIf nArgs = 1 And VarType(Arguments(UBound(Arguments))) >= vbArray Then
+        args = Arguments(0)
+    Else
+        args = Arguments
+    End If
+
+    If (UBound(args) - LBound(args) + 1) Mod 2 <> 0 Then
+        ArgList = "Error: arguments not a multiple of 2"
+        Exit Function
+    End If
+    
+    Dim i As Integer, outStr As String
+    For i = LBound(args) To UBound(args)
+        outStr = outStr + CStr(args(i)) & IIf(i < UBound(args), ";", "")
+    Next i
+    ArgList = outStr
+End Function
+
+Function ReplaceMultiple(TextInput As String, ParamArray Arguments() As Variant) As String
 ' Action: Replaces multiple values
 '
-    If (UBound(Args) - LBound(Args) + 1) Mod 2 <> 0 Then
-        MsgBox "Error: arguments not a multiple of 2", vbCritical, "Not a multiple of 2"
+    ' Handle cases where variable arguments both given as Array("","") and comma-separated values
+    Dim args As Variant
+    Dim nArgs As Integer
+    nArgs = UBound(Arguments) - LBound(Arguments) + 1
+    If nArgs = 0 Then
+        args = Arguments
+        ReplaceMultiple = TextInput
+        Exit Function
+    ElseIf nArgs = 1 And VarType(Arguments(UBound(Arguments))) >= vbArray Then
+        args = Arguments(0)
+    Else
+        args = Arguments
+    End If
+
+    If (UBound(args) - LBound(args) + 1) Mod 2 <> 0 Then
+        Err.Raise vbObjectError + 514, "ReplaceMultiple", "Error: arguments not a multiple of 2" & vbNewLine & Join(args, ";")
+        'MsgBox "Error: arguments not a multiple of 2", vbCritical, "Not a multiple of 2"
         Exit Function
     End If
     
     Dim i As Integer, textOutput As String
     textOutput = TextInput
-    For i = 0 To UBound(Args) - 1
-        textOutput = Replace(textOutput, Args(i), Args(i + 1))
+    For i = 0 To UBound(args) - 1
+        textOutput = Replace(textOutput, args(i), args(i + 1))
         i = i + 1
     Next i
     
@@ -91,6 +145,102 @@ Sub ColorWildcards()
     Loop While flag = True
 
 End Sub
+
+Function GetWildcards(templateString As String) As Collection
+' Action: Returns a collection with all wildcards (words indicated by ${SOME_TEXT} )
+'
+    Dim pos1 As Long, pos2 As Long, flag As Boolean
+    Dim wildcardsFound As New Collection
+    
+    pos1 = 1
+    Do
+        pos1 = InStr(pos1, templateString, "${")
+        If pos1 = 0 Then
+            flag = False
+        Else
+            pos2 = InStr(pos1, templateString, "}")
+            If pos2 = 0 Then
+                flag = False
+            Else
+                wildcardsFound.Add Mid(templateString, pos1, pos2 - pos1 + 1)
+                flag = True
+                pos1 = pos2
+            End If
+        End If
+    Loop While flag = True
+    
+    Set GetWildcards = wildcardsFound
+
+End Function
+
+Public Sub SetArguments()
+' Action: Sets arguments
+'
+    Dim userLocations As Range, userLocation As Range
+    Set userLocations = GetRange("UserLocations")
+    
+    ' Get selected row
+    With userLocations
+        If ActiveCell.Row >= .Row And ActiveCell.Row <= .Row + .Rows.Count - 1 And ActiveCell.Column >= .Column And ActiveCell.Column <= .Column + .Columns.Count - 1 Then
+            Debug.Print "Inside"
+            Set userLocation = userLocations.Rows(ActiveCell.Row - userLocations.Row + 1)
+            
+        Else
+            Debug.Print "Outside"
+            MsgBox "Select a cell inside UserLocations"
+            Exit Sub
+        End If
+    End With
+    
+    ' Get user location default template and arguments
+    Dim objectType As String, userLocationDefault As Range
+    Dim defaultArgs As Variant, defaultTemplateName As String
+    objectType = userLocation.Cells(1, 2)
+    Set userLocationDefault = GetRow("UserLocationDefaults", 1, objectType)
+    If Not userLocationDefault Is Nothing Then
+        defaultTemplateName = userLocationDefault.Cells(1, 2)
+        defaultArgs = Split(userLocationDefault.Cells(1, 3), ";")
+    Else
+        Dim question
+        question = MsgBox("Default user location not found", vbExclamation + vbYesNoCancel, "User location not found")
+        If question <> vbYes Then Exit Sub
+    End If
+    
+    ' Replace
+    Dim templateName As String, templateString As String
+    If userLocation.Cells(1, 3) <> "" Then
+        templateName = userLocation.Cells(1, 3)
+    Else
+        templateName = defaultTemplateName
+    End If
+    templateString = GetRange(templateName).Text
+    
+    ' Dim replace
+    Dim wildcards As Collection, wildcard As Variant
+    Set wildcards = GetWildcards(templateString)
+    
+    Dim inps As New Collection
+    Dim inp As Variant, i As Integer, outStr As String
+    For Each wildcard In wildcards
+        If wildcard <> "${NAME}" Then
+            
+            inp = Application.InputBox(wildcard, Type:=0)
+            If inp <> False Then
+                inps.Add """" & wildcard & """"
+                inps.Add Right(inp, Len(inp) - 1)
+            End If
+        End If
+    Next wildcard
+    
+    For i = 1 To inps.Count
+        outStr = outStr & inps(i) & IIf(i = inps.Count, "", ",")
+    Next i
+    
+    userLocation.Cells(1, 4).Formula = "=ArgList(" & outStr & ")"
+        
+End Sub
+
+
 
 Sub CreateReportSkeleton()
 ' Action: Creates the skeleton for the state file (.cst)
@@ -277,7 +427,7 @@ Function OutputExternalFigures() As String
     OutputExternalFigures = outStr
 End Function
 
-Function OutputUserLocationsAndPlots() As String
+Function OutputUserLocationsAndPlots_old() As String
 ' Action: Returns the cmdstr to create the user locations (Planes, surface groups, etc) and plots (Contour, Streamline, etc)
 '
     Dim outStr As New ClassString
@@ -286,28 +436,53 @@ Function OutputUserLocationsAndPlots() As String
     
     Dim i As Integer
     Dim userLocations As Range
-    Set userLocations = Range("UserLocations")
-    Dim firstUserLocation As String
+    Set userLocations = GetRange("UserLocations")
+    Dim firstUserLocation As String, templateString As String, userArgs As Variant
     firstUserLocation = "inlet"
     
+    On Error GoTo ErrorHandler
     For Each objectType In objectTypes
+        userLocationDefault
+    
+    
         For i = 1 To userLocations.Rows.Count
+            templateString = ""
             If userLocations(i, 2) = objectType Then
+                ' If template given
+                If userLocations(i, 3) <> "" Then
+                    templateString = GetRange(userLocations(i, 3))
+                End If
+                If userLocations(i, 4) <> "" Then
+                    userArgs = Split(userLocations(i, 4), ";")
+                Else
+                    userArgs = Array()
+                End If
+                
                 Select Case objectType
                     Case "Wireframe"
-                        outStr.AppendRow ReplaceMultiple(Range("Template.Wireframe"), "${NAME}", userLocations(i, 1))
+                        If templateString = "" Then templateString = GetRange("Template.Wireframe") ' Load default if no template given
+                        templateString = ReplaceMultiple(templateString, userArgs)
+                        outStr.AppendRow ReplaceMultiple(templateString, "${NAME}", userLocations(i, 1))
                     Case "Plane"
                         If firstUserLocation = "inlet" Then firstUserLocation = userLocations(i, 1)
-                        outStr.AppendRow PlanePointAndNormal(userLocations(i, 1), 0, 0, 0, 0, 0, 1)
+                        If templateString = "" Then templateString = GetRange("Template.Plane") ' Load default if no template given
+                        templateString = ReplaceMultiple(templateString, userArgs)
+                        outStr.AppendRow ReplaceMultiple(templateString, "${NAME}", userLocations(i, 1), "${NORMAL}", "0 , 0 , 1", "${POINT}", "0 [m], 0 [m], 0 [m]")
                         outStr.NewLines 1
                     Case "Surface group"
-                        outStr.AppendRow ReplaceMultiple(Range("Template.SurfaceGroup"), "${NAME}", userLocations(i, 1), "${LOCATION_LIST}", firstUserLocation, "${TRANSPARENCY}", "0.2")
+                        If templateString = "" Then templateString = GetRange("Template.SurfaceGroup")  ' Load default if no template given
+                        templateString = ReplaceMultiple(templateString, userArgs)
+                        outStr.AppendRow ReplaceMultiple(templateString, "${NAME}", userLocations(i, 1), "${LOCATION_LIST}", firstUserLocation, "${TRANSPARENCY}", "0.2")
                         outStr.NewLines 1
                     Case "Contour"
-                        outStr.AppendRow ReplaceMultiple(Range("Template.Contour"), "${NAME}", userLocations(i, 1), "${VARIABLE}", "Pressure", "${LOCATION_LIST}", firstUserLocation)
+                        If templateString = "" Then templateString = GetRange("Template.Contour")  ' Load default if no template given
+                        templateString = ReplaceMultiple(templateString, userArgs)
+                        outStr.AppendRow ReplaceMultiple(templateString, "${NAME}", userLocations(i, 1), "${VARIABLE}", "Pressure", "${LOCATION_LIST}", firstUserLocation)
                         outStr.NewLines 1
                     Case "Streamline"
-                        outStr.AppendRow ReplaceMultiple(Range("Template.Streamline"), "${NAME}", userLocations(i, 1))
+                        If templateString = "" Then templateString = GetRange("Template.Streamline")  ' Load default if no template given
+                        templateString = ReplaceMultiple(templateString, userArgs)
+                        outStr.AppendRow ReplaceMultiple(templateString, "${NAME}", userLocations(i, 1))
                         outStr.NewLines 1
                 End Select
             End If
@@ -316,6 +491,77 @@ Function OutputUserLocationsAndPlots() As String
     
     OutputUserLocationsAndPlots = outStr.Output
     
+    Exit Function
+ErrorHandler:
+    If Err.Number = vbObjectError + 513 Then
+        MsgBox Err.Description, vbCritical, "Range not found"
+        Resume Next
+    End If
+    
+End Function
+
+
+Function OutputUserLocationsAndPlots() As String
+' Action: Returns the cmdstr to create the user locations (Planes, surface groups, etc) and plots (Contour, Streamline, etc)
+'
+    Dim outStr As New ClassString
+    
+    Dim i As Integer, j As Integer
+    Dim userLocations As Range
+    Set userLocations = GetRange("UserLocations")
+    Dim firstUserLocation As String
+    firstUserLocation = "inlet"
+    
+    Dim userLocationDefaults As Range, objectType As String, defaultArgs As Variant
+    Dim defaultTemplateName As String, defaultTemplateString As String
+    Set userLocationDefaults = GetRange("UserLocationDefaults")
+    
+    On Error GoTo ErrorHandler
+    
+    ' Loop through all userLocation objects
+    For i = 1 To userLocationDefaults.Rows.Count
+        objectType = userLocationDefaults(i, 1)
+        If objectType = "" Then GoTo NextObjectType
+        
+        defaultTemplateName = userLocationDefaults(i, 2)
+        defaultTemplateString = GetRange(defaultTemplateName)
+        defaultArgs = Split(userLocationDefaults(i, 3), ";")
+        
+        ' Loop through userLocation range
+        Dim customTemplateName As String, templateString As String, customArgs As Variant
+        For j = 1 To userLocations.Rows.Count
+            If userLocations(j, 2) <> objectType Then GoTo NextUserLocation
+            If userLocations(i, 3) <> "" Then
+                templateString = GetRange(userLocations(j, 3))
+            Else
+                templateString = defaultTemplateString
+            End If
+            customArgs = Split(userLocations(j, 4), ";")
+            templateString = ReplaceMultiple(templateString, "${NAME}", userLocations(j, 1))
+            templateString = ReplaceMultiple(templateString, customArgs)
+            templateString = ReplaceMultiple(templateString, defaultArgs)
+            outStr.AppendRow templateString
+            outStr.NewLines 1
+NextUserLocation:
+        Next j
+NextObjectType:
+    Next i
+    
+    OutputUserLocationsAndPlots = outStr.Output
+    Exit Function
+ErrorHandler:
+    If Err.Number = vbObjectError + 513 Then
+        MsgBox Err.Description, vbCritical, "Range not found"
+        Resume Next
+    ElseIf Err.Number = vbObjectError + 514 Then
+        Err.Raise vbObjectError + 514, Err.Source, Err.Description
+    End If
+    
+End Function
+
+
+Function OutputUserLocation(userLocation As Range) As String
+
 End Function
 
 Function OutputResetViews() As String
@@ -357,14 +603,14 @@ Function OutputResetViews() As String
             userLocs = Split(figures(i, 4), ",")
             
             For j = LBound(userLocs) To UBound(userLocs)
-                userLocName = userLocs(j)
+                userLocName = Trim(userLocs(j))
                 Dim r As Range
                 Set r = GetRow("UserLocations", 1, userLocName)
                 If Not r Is Nothing Then
                     userLocType = r.Cells(1, 2)
                 Else
                     Dim question
-                    question = MsgBox("Error in """ & targetFigure & """, user location """ & userLocName & """ not found", vbExclamation + vbYesNoCancel, "User location not found")
+                    question = MsgBox("Error in figure """ & targetFigure & """, user location """ & userLocName & """ not found", vbExclamation + vbYesNoCancel, "User location not found")
                     If question <> vbYes Then Exit Function Else userLocType = "Plane"
                 End If
                 outStr.AppendRow ">show /" & UCase(userLocType) & ":" & userLocName & ", view=/VIEW:" & targetFigure
