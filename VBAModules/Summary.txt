@@ -1,0 +1,47 @@
+Updated = 2020-07-03 15:26:39
+Number of modules = 3
+Number of procedures = 33
+
+CFDPost_cmdlineGen, Number of procedures = 24
+   Text2Clipboard                             474
+   GetRow                                     412
+   GetRange                                   381
+   Indent                                     288
+   NewLines                                   124
+   GetPathAbsolute                            380
+   Cells2List                                 281
+   ArgList                                    870
+   ReplaceMultiple                           1184
+   ColorWildcards                             766
+   GetWildcards                               784
+   SetArguments                              2429
+   CreateReportSkeleton                      4710
+   OutputModelDescription                    1309
+   OutputResultTable                          962
+   OutputReportOrder                         1265
+   OutputExternalFigures                     1342
+   OutputSub_HideShowObjects                  955
+   OutputUserLocationsAndPlots               2358
+   OutputUserLocation                          80
+   OutputResetViews                          3085
+   OutputReportSettings                       875
+   OutputLoadFile                             305
+   PlanePointAndNormal                        775
+                                     Sum:   26394
+
+ClassString, Number of procedures = 6
+   Class_Initialize                            59
+   Clear                                       75
+   AppendRow                                  137
+   Append                                     122
+   Output                                     103
+   NewLines                                   120
+                                     Sum:     616
+
+Testing, Number of procedures = 3
+   TestReplaceMultiple                        722
+   TestGetRange                               339
+   TestSelectTables                           404
+                                     Sum:    1465
+
+

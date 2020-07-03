@@ -10,9 +10,9 @@ Private Sub TestReplaceMultiple()
     Debug.Print ReplaceMultiple("${1} ${2}", Split("${1};Text1;${2};Text2", ";"))
     
     
-    Dim apa As Variant
-    apa = Array()
-    Debug.Print ReplaceMultiple("${1} ${2}", apa)
+    Dim APA As Variant
+    APA = Array()
+    Debug.Print ReplaceMultiple("${1} ${2}", APA)
     
     Dim stringArray() As String
     stringArray = Split("${1};Text1;${2};Text2", ";")
