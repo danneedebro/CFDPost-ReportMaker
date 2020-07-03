@@ -1,20 +1,12 @@
 Attribute VB_Name = "CFDPost_cmdlineGen"
 Option Explicit
 
-Const TABLE_FIGURES = "Figures"
-Const TABLE_VIEWS = "Views"
-Const FIGURE_HEIGHT = "Figure.Height"
-Const FIGURE_WIDTH = "Figure.Width"
-Const REPORT_PATH = "Report.Path"
-Const REPORT_TITLE = "Report.Title"
-Const REPORT_AUTHOR = "Report.Author"
-
 Private Sub Text2Clipboard(OutputString As String)
 '
     Dim MSForms_DataObject As Object
     Set MSForms_DataObject = CreateObject("new:{1C3B4210-F441-11CE-B9EA-00AA006B1A69}")
     
-    MsgBox "Text copied" & vbNewLine & vbNewLine & OutputString, vbOKOnly + vbInformation, "Command line arguments copied"
+    MsgBox "Text copied. Start CFDPost and paste into command editor." & vbNewLine & vbNewLine & OutputString, vbOKOnly + vbInformation, "Command line arguments copied"
     
     With MSForms_DataObject
         .SetText OutputString
@@ -45,8 +37,23 @@ ErrorHandler:
     Err.Raise vbObjectError + 513, "Function GetRange", "Named range """ & RangeName & """ not found. ActiveWorkbook=" & ActiveWorkbook.Name & ", ActiveSheet=" & ActiveSheet.Name
 End Function
 
+Private Function Indent(StringBlockToIndent As String, Optional NumberOfSpaces As Integer = 4) As String
+' Action: Indents the supplied string with
+'
+    Indent = Replace(String(NumberOfSpaces, " ") & StringBlockToIndent, Chr(10), Chr(10) & String(NumberOfSpaces, " "))
+End Function
+
 Function NewLines(NumberOfNewLines As Integer) As String
     NewLines = String(NumberOfNewLines, vbNewLine)
+End Function
+
+Private Function GetPathAbsolute(Path_relative_or_absolute As String) As String
+' Action: Combines (if necessary), the base path and the supplied path
+'         TODO: Add more checks here to know if absolute or relative path is given
+'
+    Dim path_base As String
+    path_base = Range("Path.Base")
+    GetPathAbsolute = path_base & Path_relative_or_absolute
 End Function
 
 Function Cells2List(ParamArray SelectedCells() As Variant) As String
@@ -248,6 +255,8 @@ Sub CreateReportSkeleton()
     Dim outStr As New ClassString, i As Integer
     
     ' STEP 0: Load result file
+    outStr.AppendRow OutputSub_HideShowObjects()
+    
     outStr.AppendRow "!sub LoadResultFile{"
     outStr.AppendRow ">close"
     outStr.AppendRow OutputLoadFile()
@@ -265,22 +274,37 @@ Sub CreateReportSkeleton()
     
     ' STEP 3: Create Result table
     outStr.AppendRow "!sub UpdateResultTable{"
+    outStr.AppendRow "!# Action: Updates result table" & vbNewLine & "!#"
     outStr.AppendRow OutputResultTable()
-    outStr.AppendRow "!}"
+    outStr.AppendRow "!}" & vbNewLine
     
     ' STEP 4: Create figures and report elements
-    Dim figureTables As Variant, figureTable As Variant, figureTableRng As Range
+    Dim figureTables As Variant, figureTable As Variant, figureTableRng As Range, copy_type As String
     figureTables = Array("Geometry", "Mesh", "Solution")
     outStr.AppendRow "!sub CreateFigures{"
+    outStr.AppendRow "!# Action: Creates figures"
+    outStr.AppendRow "!#"
+    
+    If Range("Options.ShallowCopy") = "YES" Then
+        copy_type = "shallow_copy"
+    Else
+        copy_type = "copy"
+        outStr.AppendRow "!   # Activate all known objects to make a deep copy   "
+        outStr.AppendRow "    > setViewportView cmd=set, view=/VIEW:View 1, viewport=1"
+        outStr.AppendRow "!   HideShowObjects(""View 1"",""show"");"
+    End If
+    
+    
     For Each figureTable In figureTables
-        outStr.AppendRow ReplaceMultiple(Range("Template.Comment"), "${NAME}", "Header " & figureTable, "${COMMENT_HEADING_LEVEL}", "1", _
-                                         "${COMMENT_HEADING}", figureTable, "${COMMENT_TEXT}", "")
+        outStr.AppendRow Indent(ReplaceMultiple(Range("Template.Comment"), "${NAME}", "Header " & figureTable, "${COMMENT_HEADING_LEVEL}", "1", _
+                                         "${COMMENT_HEADING}", figureTable, "${COMMENT_TEXT}", ""))
         Set figureTableRng = Range("Figures." & figureTable)
         
         For i = 1 To figureTableRng.Rows.Count
             If figureTableRng(i, 1).Text <> "" Then
-                outStr.AppendRow ReplaceMultiple(">delete /VIEW:${FIGURE}", "${FIGURE}", figureTableRng(i, 1))
-                outStr.AppendRow ReplaceMultiple("> setViewportView cmd=shallow_copy, view=/VIEW:${FIGURE}, viewport=1", "${FIGURE}", figureTableRng(i, 1))
+                outStr.AppendRow ReplaceMultiple("    >delete /VIEW:${FIGURE}", "${FIGURE}", figureTableRng(i, 1))
+                outStr.AppendRow ReplaceMultiple("    > setViewportView cmd=${COPY_TYPE}, view=/VIEW:${FIGURE}, viewport=1", "${FIGURE}", figureTableRng(i, 1), "${COPY_TYPE}", copy_type)
+                ' TODO: HIDE LOCAL OBJECTS WITH This outStr.AppendRow "!   HideShowObjects(""View 1"",""hide"");"
             End If
         Next i
     Next figureTable
@@ -293,17 +317,17 @@ Sub CreateReportSkeleton()
     
     ' STEP 5: Create external plots
     outStr.AppendRow "!sub LoadExternalFigures{"
-    outStr.AppendRow OutputExternalFigures()
+    outStr.AppendRow Indent(OutputExternalFigures())
     outStr.AppendRow "!}"
     
     ' STEP 6: Update report settings
     outStr.AppendRow "!sub SetReportSettings{"
-    outStr.AppendRow OutputReportSettings()
+    outStr.AppendRow Indent(OutputReportSettings())
     outStr.AppendRow "!}"
     
     ' STEP 7: Set report order
     outStr.AppendRow "!sub SortReportItems{"
-    outStr.AppendRow OutputReportOrder()
+    outStr.AppendRow Indent(OutputReportOrder())
     outStr.AppendRow "!}"
     
     ' STEP 8: Publish report
@@ -333,7 +357,7 @@ Sub CreateReportSkeleton()
     outStr.AppendRow "!SortReportItems();"
     outStr.AppendRow "!SetReportSettings();"
     outStr.AppendRow "# Step 5: Publish report"
-    outStr.AppendRow ReplaceMultiple("# !PublishReport(""${PATH}"");", "${PATH}", Range("Report.Path"))
+    outStr.AppendRow ReplaceMultiple("# !PublishReport(""${PATH}"");", "${PATH}", GetPathAbsolute(Range("Report.Path")))
 
     Text2Clipboard outStr.Output
     
@@ -348,26 +372,31 @@ Function OutputModelDescription() As String
     tmpStr = tmpStr & "<p><b>Turbulence: " & "</b><br>Model = " & Range("TurbulenceModel.Name") & "<br>Wall function = " & Range("TurbulenceModel.WallFunction").Text & "</p>"
     tmpStr = tmpStr & "<p><b>Fluid: " & Range("Fluid.Description") & "</b><br>Density = " & Range("Fluid.Density") & " kg/m3<br>Viscosity = " & Range("Fluid.Viscosity").Text & " Pa·s</p>"
     tmpStr = tmpStr & ReplaceMultiple(Range("Template.CommentSubheading").Text, "${TITLE}", "Inlet:", "${TEXT}", Range("BC.Inlet").Text)
-    tmpStr = tmpStr & ReplaceMultiple(Range("Template.CommentSubheading").Text, "${TITLE}", "Outlet:", "${TEXT}", Range("BC.Outlet").Text) & vbNewLine
+    tmpStr = tmpStr & ReplaceMultiple(Range("Template.CommentSubheading").Text, "${TITLE}", "Outlet:", "${TEXT}", Range("BC.Outlet").Text)
+    tmpStr = tmpStr & ReplaceMultiple(Range("Template.CommentSubheading").Text, "${TITLE}", "Notes:", "${TEXT}", Replace(Range("Misc.Notes").Text, Chr(10), "<BR>")) & vbNewLine
     OutputModelDescription = ReplaceMultiple(Range("Template.Comment").Text, "${NAME}", "Header Description", "${COMMENT_HEADING_LEVEL}", "1", "${COMMENT_HEADING}", "Model description", "${COMMENT_TEXT}", tmpStr)
 End Function
 
 Function OutputResultTable() As String
 ' Action: Returns the result table
 '
-    Dim outStr As New ClassString, i As Integer, tableInput As Range
-    outStr.AppendRow "TABLE:Result Table"
-    outStr.AppendRow "  TABLE CELLS:"
+    Dim outStr As New ClassString, i As Integer, j As Integer, tableInput As Range
+    Dim cellName As String
+    outStr.AppendRow "   TABLE:Result Table"
+    outStr.AppendRow "      TABLE CELLS:"
     Set tableInput = Range("TableInput")
     For i = 1 To tableInput.Rows.Count
-        If tableInput(i, 1) <> "" Then
-            outStr.AppendRow ReplaceMultiple("    ${CELL} = ""${FORMULA}"", False, False, False, Left, True, 0, Font Name, 1|1, %10.3e, True, ffffff, 000000, True", _
-                                             "${CELL}", tableInput(i, 1), "${FORMULA}", tableInput(i, 2))
-        End If
+        For j = 1 To tableInput.Columns.Count
+            cellName = Chr(64 + j) & CStr(i)
+            'If tableInput(i, j) <> "" Then
+                outStr.AppendRow ReplaceMultiple("         ${CELL} = ""${FORMULA}"", False, False, False, Left, True, 0, Font Name, 1|1, %10.3e, True, ffffff, 000000, True", _
+                                                 "${CELL}", cellName, "${FORMULA}", tableInput(i, j))
+            'End If
+        Next j
     Next i
         
-    outStr.AppendRow "  END"
-    outStr.AppendRow "END"
+    outStr.AppendRow "      END"
+    outStr.Append "   END"
     
     OutputResultTable = outStr.Output
 
@@ -416,7 +445,10 @@ Function OutputExternalFigures() As String
         tmpStr = ""
         For i = 1 To figureTableRng.Rows.Count
             If figureTableRng(i, 3) <> "" Then
-                tmpStr = tmpStr & ReplaceMultiple(Range("Template.ExternalFigure").Text, "${PATH}", figureTableRng(i, 3).Text, Chr(10), "\" & Chr(10), _
+                Dim figure_path As String
+                figure_path = GetPathAbsolute(figureTableRng(i, 3).Text)
+            
+                tmpStr = tmpStr & ReplaceMultiple(Range("Template.ExternalFigure").Text, "${PATH}", figure_path, Chr(10), "\" & Chr(10), _
                                                   "${FIGURE_NAME}", "Figure C" & CStr(i), "${FIGURE_CAPTION}", figureTableRng(i, 2).Text)
             End If
         Next i
@@ -427,78 +459,29 @@ Function OutputExternalFigures() As String
     OutputExternalFigures = outStr
 End Function
 
-Function OutputUserLocationsAndPlots_old() As String
-' Action: Returns the cmdstr to create the user locations (Planes, surface groups, etc) and plots (Contour, Streamline, etc)
+Private Function OutputSub_HideShowObjects() As String
+' Action: Outputs the Pearl subroutine to hide and show objects (user location an plots)
 '
-    Dim outStr As New ClassString
-    Dim objectTypes As Variant, objectType As Variant
-    objectTypes = Array("Wireframe", "Plane", "Surface group", "Contour", "Streamline")
-    
-    Dim i As Integer
     Dim userLocations As Range
     Set userLocations = GetRange("UserLocations")
-    Dim firstUserLocation As String, templateString As String, userArgs As Variant
-    firstUserLocation = "inlet"
+    Dim userlocation_list As String
+    userlocation_list = ""
     
-    On Error GoTo ErrorHandler
-    For Each objectType In objectTypes
-        userLocationDefault
+    Dim i As Integer, j As Integer
+    For i = 1 To userLocations.Rows.Count
+        Dim userlocation_type As String, userlocation_name As String
+        userlocation_name = userLocations(i, 1)
+        userlocation_type = userLocations(i, 2)
+        If userlocation_name <> "" Then
+            userlocation_list = userlocation_list & """/" & UCase(userlocation_type) & ":" & userlocation_name & ""","
+        End If
+    Next
+    userlocation_list = Left(userlocation_list, Len(userlocation_list) - 1)
     
-    
-        For i = 1 To userLocations.Rows.Count
-            templateString = ""
-            If userLocations(i, 2) = objectType Then
-                ' If template given
-                If userLocations(i, 3) <> "" Then
-                    templateString = GetRange(userLocations(i, 3))
-                End If
-                If userLocations(i, 4) <> "" Then
-                    userArgs = Split(userLocations(i, 4), ";")
-                Else
-                    userArgs = Array()
-                End If
-                
-                Select Case objectType
-                    Case "Wireframe"
-                        If templateString = "" Then templateString = GetRange("Template.Wireframe") ' Load default if no template given
-                        templateString = ReplaceMultiple(templateString, userArgs)
-                        outStr.AppendRow ReplaceMultiple(templateString, "${NAME}", userLocations(i, 1))
-                    Case "Plane"
-                        If firstUserLocation = "inlet" Then firstUserLocation = userLocations(i, 1)
-                        If templateString = "" Then templateString = GetRange("Template.Plane") ' Load default if no template given
-                        templateString = ReplaceMultiple(templateString, userArgs)
-                        outStr.AppendRow ReplaceMultiple(templateString, "${NAME}", userLocations(i, 1), "${NORMAL}", "0 , 0 , 1", "${POINT}", "0 [m], 0 [m], 0 [m]")
-                        outStr.NewLines 1
-                    Case "Surface group"
-                        If templateString = "" Then templateString = GetRange("Template.SurfaceGroup")  ' Load default if no template given
-                        templateString = ReplaceMultiple(templateString, userArgs)
-                        outStr.AppendRow ReplaceMultiple(templateString, "${NAME}", userLocations(i, 1), "${LOCATION_LIST}", firstUserLocation, "${TRANSPARENCY}", "0.2")
-                        outStr.NewLines 1
-                    Case "Contour"
-                        If templateString = "" Then templateString = GetRange("Template.Contour")  ' Load default if no template given
-                        templateString = ReplaceMultiple(templateString, userArgs)
-                        outStr.AppendRow ReplaceMultiple(templateString, "${NAME}", userLocations(i, 1), "${VARIABLE}", "Pressure", "${LOCATION_LIST}", firstUserLocation)
-                        outStr.NewLines 1
-                    Case "Streamline"
-                        If templateString = "" Then templateString = GetRange("Template.Streamline")  ' Load default if no template given
-                        templateString = ReplaceMultiple(templateString, userArgs)
-                        outStr.AppendRow ReplaceMultiple(templateString, "${NAME}", userLocations(i, 1))
-                        outStr.NewLines 1
-                End Select
-            End If
-        Next i
-    Next objectType
-    
-    OutputUserLocationsAndPlots = outStr.Output
-    
-    Exit Function
-ErrorHandler:
-    If Err.Number = vbObjectError + 513 Then
-        MsgBox Err.Description, vbCritical, "Range not found"
-        Resume Next
-    End If
-    
+    OutputSub_HideShowObjects = ReplaceMultiple(Range("Template.HelperSubs"), "${USER_LOCATIONS}", userlocation_list)
+
 End Function
+
 
 
 Function OutputUserLocationsAndPlots() As String
@@ -578,13 +561,13 @@ Function OutputResetViews() As String
     Set userLocations = Range("UserLocations")
     Dim locType As String
     outStr.AppendRow "# Hides all known objects in Figure X"
-    outStr.AppendRow "!sub HideAllKnownObjects {"
+    outStr.AppendRow "!   sub HideAllKnownObjects {"
     For i = 1 To userLocations.Rows.Count
         If userLocations(i, 1) <> "" Then
-            outStr.AppendRow "   >hide /" & UCase(userLocations(i, 2)) & ":" & userLocations(i, 1) & ", view=/VIEW:$_[0]"
+            outStr.AppendRow "      >hide /" & UCase(userLocations(i, 2)) & ":" & userLocations(i, 1) & ", view=/VIEW:$_[0]"
         End If
     Next i
-    outStr.AppendRow "!}"
+    outStr.AppendRow "!   }" & vbNewLine
     
     Dim figures As Range, figureTables As Variant, figureTable As Variant
     Dim sourceView As String, targetFigure As String, userLocType As String, userLocName As String
@@ -598,8 +581,8 @@ Function OutputResetViews() As String
         For i = 1 To figures.Rows.Count
             sourceView = figures(i, 2)
             targetFigure = figures(i, 1)
-            outStr.AppendRow "# Figure: " & targetFigure
-            outStr.AppendRow "!HideAllKnownObjects(""" & targetFigure & """);"
+            outStr.AppendRow "!   # Figure: " & targetFigure
+            outStr.AppendRow "!   HideAllKnownObjects(""" & targetFigure & """);"
             userLocs = Split(figures(i, 4), ",")
             
             For j = LBound(userLocs) To UBound(userLocs)
@@ -613,16 +596,16 @@ Function OutputResetViews() As String
                     question = MsgBox("Error in figure """ & targetFigure & """, user location """ & userLocName & """ not found", vbExclamation + vbYesNoCancel, "User location not found")
                     If question <> vbYes Then Exit Function Else userLocType = "Plane"
                 End If
-                outStr.AppendRow ">show /" & UCase(userLocType) & ":" & userLocName & ", view=/VIEW:" & targetFigure
+                outStr.AppendRow "    >show /" & UCase(userLocType) & ":" & userLocName & ", view=/VIEW:" & targetFigure
             Next j
             
             
-            outStr.AppendRow ">delete /VIEW:" & targetFigure & "/CAMERA"
-            outStr.AppendRow ">copy from = /VIEW:" & sourceView & "/CAMERA, to = /VIEW:" & targetFigure & "/CAMERA"
+            outStr.AppendRow "    >delete /VIEW:" & targetFigure & "/CAMERA"
+            outStr.AppendRow "    >copy from = /VIEW:" & sourceView & "/CAMERA, to = /VIEW:" & targetFigure & "/CAMERA"
             If figures(i, 3) = "Yes" Then
-                outStr.AppendRow "> report showItem=/VIEW:" & targetFigure
+                outStr.AppendRow "    > report showItem=/VIEW:" & targetFigure
             Else
-                outStr.AppendRow "> report hideItem=/VIEW:" & targetFigure
+                outStr.AppendRow "    > report hideItem=/VIEW:" & targetFigure
             End If
             
             outStr.AppendRow ""
@@ -638,10 +621,12 @@ Function OutputReportSettings() As String
 ' Action: Returns cmdstr for setting the report settings
 '
     Dim outStr As New ClassString
+    Dim report_path As String
+    report_path = GetPathAbsolute(Range("Report.Path"))
 
     ' Update report settings
     outStr.AppendRow ReplaceMultiple(Range("Template.ReportSettings").Text, "${FIGURE_HEIGHT}", Range("Figure.Height"), "${FIGURE_WIDTH}", _
-                                      Range("Figure.Width"), "${REPORT_PATH}", Range("Report.Path"), "${REPORT_AUTHOR}", Range("Report.Author").Text, _
+                                      Range("Figure.Width"), "${REPORT_PATH}", report_path, "${REPORT_AUTHOR}", Range("Report.Author").Text, _
                                       "${REPORT_TITLE}", Range("Report.Title").Text)
     ' White background
     outStr.AppendRow ">setPreferences Viewer Background Colour Type = Solid, Viewer Background Image File =  , Viewer Background Colour = 1.0&1.0&1.0"
@@ -654,7 +639,7 @@ Function OutputLoadFile() As String
 ' Action: Returns the cmdstr for loading a file
 '
     Dim outStr As New ClassString
-    outStr.AppendRow ReplaceMultiple(Range("Template.LoadFile"), "${FILENAME}", Range("ResultFile"))
+    outStr.AppendRow ReplaceMultiple(Range("Template.LoadFile"), "${FILENAME}", GetPathAbsolute(Range("ResultFile")))
     
     OutputLoadFile = outStr.Output
     
