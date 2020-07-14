@@ -31,10 +31,10 @@ Public Sub Append(NewText As String)
     pString = pString & NewText
 End Sub
 
-Public Function Output() As String
+Public Function output() As String
 ' Action: Returns contents
 '
-    Output = pString
+    output = pString
 End Function
 
 Public Sub NewLines(NumberOfNewLines As Integer)

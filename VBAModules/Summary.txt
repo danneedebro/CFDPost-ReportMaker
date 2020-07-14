@@ -1,47 +1,123 @@
-Updated = 2020-07-03 15:26:39
-Number of modules = 3
-Number of procedures = 33
+Updated = 2020-07-14 23:23:11
+Number of modules = 10
+Number of procedures = 88
 
-CFDPost_cmdlineGen, Number of procedures = 24
+CFDPost_cmdlineGen, Number of procedures = 30
    Text2Clipboard                             474
-   GetRow                                     412
-   GetRange                                   381
-   Indent                                     288
-   NewLines                                   124
-   GetPathAbsolute                            380
+   GetPathAbsolute                            384
    Cells2List                                 281
-   ArgList                                    870
-   ReplaceMultiple                           1184
-   ColorWildcards                             766
+   GetFigures                                 883
+   ArgList                                    872
+   ColorWildcards                             770
    GetWildcards                               784
-   SetArguments                              2429
-   CreateReportSkeleton                      4710
+   SetArguments                              2437
+   TTEST                                       67
+   CheckRange                                 341
+   Test_CheckInput                             68
+   CreateReportSkeleton                      3091
    OutputModelDescription                    1309
    OutputResultTable                          962
    OutputReportOrder                         1265
    OutputExternalFigures                     1342
    OutputSub_HideShowObjects                  955
+   OutputSub_ReportSettings                   865
+   OutputSub_ReportSortItems                  698
+   OutputSub_CreateViews                     1780
+   OutputSub_CreateFigures                   2008
    OutputUserLocationsAndPlots               2358
    OutputUserLocation                          80
-   OutputResetViews                          3085
+   OutputResetViews                          3102
    OutputReportSettings                       875
    OutputLoadFile                             305
-   PlanePointAndNormal                        775
-                                     Sum:   26394
+   PlanePointAndNormal                        773
+   Test_GetFigures                            565
+   Test_CreateViews                            82
+   Test_CreateFigures                          86
+                                     Sum:   29862
 
 ClassString, Number of procedures = 6
    Class_Initialize                            59
    Clear                                       75
    AppendRow                                  137
    Append                                     122
-   Output                                     103
+   output                                     103
    NewLines                                   120
                                      Sum:     616
 
-Testing, Number of procedures = 3
+Testing, Number of procedures = 9
    TestReplaceMultiple                        722
    TestGetRange                               339
-   TestSelectTables                           404
-                                     Sum:    1465
+   TestSelectTables                           398
+   Test_TemplateObject                       1024
+   Test_PlotObject                            954
+   Test_PlotObjects                           886
+   Test_TableObject                           619
+   Test_GetPlotObjectDefaults                 958
+   Test_Main                                 2904
+                                     Sum:    8804
+
+InputChecking, Number of procedures = 5
+   CheckInput                                1010
+   CheckInputTables                           924
+   CheckInputFigures                         2771
+   CheckInputViews                           1347
+   CheckInputUserLocationsAndPlots           1248
+                                     Sum:    7300
+
+HelperFunctions, Number of procedures = 5
+   FindRowInRange                             439
+   GetRange                                   536
+   Indent                                     280
+   NewLines                                   124
+   ReplaceMultiple                           1186
+                                     Sum:    2565
+
+PlotObject, Number of procedures = 8
+   Log                                        251
+   Log                                        107
+   Class_Initialize                            80
+   ResetMe                                     89
+   Create                                    1194
+   Refresh                                    864
+   Copy                                       330
+   AppendLog                                  212
+                                     Sum:    3127
+
+TemplateObject, Number of procedures = 8
+   Log                                        251
+   Log                                        107
+   Class_Initialize                            54
+   ResetMe                                    138
+   Create                                    1026
+   Refresh                                   1855
+   Copy                                       438
+   AppendLog                                  210
+                                     Sum:    4079
+
+PlotObjectCollection, Number of procedures = 6
+   NewEnum                                    171
+   Class_Initialize                           106
+   Add                                        194
+   Item                                       103
+   Count                                       78
+   FindItemByName                             419
+                                     Sum:    1071
+
+TableObject, Number of procedures = 8
+   Class_Initialize                           113
+   Create                                     526
+   AppendLog                                  146
+   Item                                        76
+   GetRow                                     186
+   GetRange                                    84
+   NumberOfRows                               101
+   SelectRow                                  400
+                                     Sum:    1632
+
+Main, Number of procedures = 3
+   Class_Initialize                           120
+   GetPlotObjectDefaults                     1200
+   SetPlotObjects                            2714
+                                     Sum:    4034
 
 
